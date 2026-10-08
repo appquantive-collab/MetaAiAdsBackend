@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
-    "@fastify/static": "^10.1.5",
+    "@fastify/cors": "^11.3.1",
     "fastify": "^5.12.5",
     "mongodb": "^7.7.0",
     "zod": "^4.6.5"

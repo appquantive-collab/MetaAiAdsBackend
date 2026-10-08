@@ -1,11 +1,10 @@
 import Fastify from "fastify";
-import fastifyStatic from "@fastify/static";
-import { fileURLToPath } from "node:url";
-import { readFile } from "node:fs/promises";
+import fastifyCors from "@fastify/cors";
 import { z } from "zod";
 import type { AppDb } from "./db.ts";
 import { newId, now } from "./db.ts";
 import { hashPassword, issueToken, readToken, verifyPassword, type Role, type User } from "./auth.ts";
+import { config } from "./config.ts";
 import { PLANS, type PlanName } from "./plans.ts";
 import { makeSubscriptions } from "./subscriptions.ts";
 import { httpError } from "./types.ts";
@@ -27,8 +26,7 @@ export const AUTOMATION_MODULES: AutomationModule[] = [
 
 export async function buildApp(db: AppDb, metaAds: MetaAdsDeps): Promise<ReturnType<typeof Fastify> & { runDaily: () => Promise<void> }> {
   const app = Fastify({ logger: false });
-  const publicDir = fileURLToPath(new URL("../../public/", import.meta.url));
-  app.register(fastifyStatic, { root: publicDir });
+  await app.register(fastifyCors, { origin: config.corsOrigins });
 
   const subs = makeSubscriptions(db);
 
@@ -140,16 +138,6 @@ export async function buildApp(db: AppDb, metaAds: MetaAdsDeps): Promise<ReturnT
 
   // --- Automation modules ------------------------------------------------------
   const metaAdsApp = registerMetaAdsRoutes(app, db, subs, metaAds);
-
-  // SPA fallback: React Router owns client-side paths like /login or /dashboard, which don't
-  // exist as server routes. Serve index.html for those; keep a real 404 for unmatched /api/*.
-  const indexHtml = await readFile(`${publicDir}index.html`, "utf-8").catch(() => null);
-  app.setNotFoundHandler((req, reply) => {
-    if (req.method === "GET" && !req.url.startsWith("/api/") && indexHtml !== null) {
-      return reply.code(200).type("text/html").send(indexHtml);
-    }
-    reply.code(404).send({ error: "Not found" });
-  });
 
   Object.assign(app, { runDaily: metaAdsApp.runDaily });
   return app as typeof app & { runDaily: typeof metaAdsApp.runDaily };

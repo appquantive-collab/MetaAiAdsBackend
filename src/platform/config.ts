@@ -13,4 +13,9 @@ export const config = {
   tokenEncKey: process.env.TOKEN_ENC_KEY ?? "",
   mongodbUri: process.env.MONGODB_URI ?? "",
   mongodbDbName: process.env.MONGODB_DB_NAME ?? "appquantive",
+  // Comma-separated list of origins allowed to call this API (the appquantive-web frontend, plus local dev).
+  corsOrigins: (process.env.CORS_ORIGINS ?? "https://appquantive.com,https://www.appquantive.com,http://localhost:5173,http://localhost:5174")
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean),
 };

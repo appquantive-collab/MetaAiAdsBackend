@@ -1,8 +1,12 @@
 # AppQuantive Backend
 
-The shared, multi-tenant backend for AppQuantive's automation products. Customers sign up once, subscribe
+The shared, multi-tenant **API** for AppQuantive's automation products. Customers sign up once, subscribe
 to one or more automations (by slug, matching the catalog in `appquantive-web`'s `automations.ts`), and
 each automation module handles its own execution behind that subscription check.
+
+This is API-only — there is no bundled frontend. The account UI (signup, login, dashboard, Meta Ads AI
+onboarding) lives in `appquantive-web` under `src/app/`, calling this service as a CORS-enabled API
+(`VITE_API_BASE` / `src/app/lib/api.ts`). Allowed origins are set via `CORS_ORIGINS` (see `.env.example`).
 
 Run it: `npm install`, copy `.env.example` to `.env`, then `npm start` (Node 24, no build step).
 Tests: `npm test`. Types: `npm run typecheck`.
