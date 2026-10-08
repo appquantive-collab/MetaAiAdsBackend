@@ -9,4 +9,4 @@ await app.listen({ port: config.port, host: "0.0.0.0" });
 console.log(`AppQuantive backend on http://localhost:${config.port}  (metaDryRun=${config.metaDryRun}, claude=${config.anthropicKey !== ""})`);
 
 // Job scheduler: check hourly; each live Meta Ads campaign is optimized at most once per 24h.
-setInterval(() => void app.runDaily(), 60 * 60 * 1000);
+setInterval(() => void app.runDaily().catch((e: unknown) => console.error("runDaily crashed", e)), 60 * 60 * 1000);

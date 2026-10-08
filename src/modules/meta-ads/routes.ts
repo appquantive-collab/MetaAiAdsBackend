@@ -283,7 +283,7 @@ export function registerMetaAdsRoutes(app: FastifyInstance, db: AppDb, subs: Sub
     const due = await db.campaign.find({
       status: "live",
       $or: [{ last_optimized_at: null }, { last_optimized_at: { $lt: cutoff } }],
-    }).toArray();
+    }).toArray().catch((e) => { console.error("runDaily: failed to list due campaigns", e.message); return []; });
     for (const r of due) await optimize(r._id).catch((e) => console.error("optimize failed", r._id, e.message));
   }
 
