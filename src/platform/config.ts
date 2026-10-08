@@ -11,5 +11,6 @@ export const config = {
   publicUrl: process.env.PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 3000}`,
   get metaRedirectUri() { return process.env.META_REDIRECT_URI ?? `${this.publicUrl}/api/meta/callback`; },
   tokenEncKey: process.env.TOKEN_ENC_KEY ?? "",
-  dbPath: process.env.DB_PATH ?? "./data/app.db",
+  mongodbUri: process.env.MONGODB_URI ?? "",
+  mongodbDbName: process.env.MONGODB_DB_NAME ?? "appquantive",
 };

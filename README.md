@@ -81,12 +81,11 @@ AppQuantive subscription fee is separate and not yet wired to a payment provider
 - Real Graph API calls (`GraphApi`) are untested against Meta. Test them first in a sandbox ad account with
   `META_DRY_RUN=false`. Field names and API version (`META_API_VERSION`) may need changes.
 - Google OAuth and phone+password sign-in (email+password only today).
-- A real React frontend (dashboard) — today's `public/index.html` is a minimal placeholder.
 - Image upload/cropping (1:1, 4:5, 9:16), AI images, Pixel/Conversions API, lead-form creation, Special Ad
   Category flow in the UI.
 - Billing: plans exist but nothing charges yet (Razorpay/Stripe subscriptions, or % of spend from Insights).
   Also missing: password reset, email verification, team invites, audit log, rate limiting.
-- Postgres (SQLite via `node:sqlite` for now), a durable job queue.
+- A durable job queue (the daily optimizer is a plain `setInterval` today).
 - Additional automation modules beyond Meta Ads AI (Hiring AI, Lead Routing AI, etc. from the
   appquantive-web catalog) — same module pattern, not yet built.
 - Phase 2: auto-apply (`limits.autoApply`) exists but spend increases always require approval.

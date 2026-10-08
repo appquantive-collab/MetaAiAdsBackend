@@ -1,42 +1,39 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { AppDb } from "./db.ts";
 import { newId, now } from "./db.ts";
 import { PLANS, type PlanName } from "./plans.ts";
 import { httpError } from "./types.ts";
 
-type Row = Record<string, any>;
-
 /** Which automations (by slug) an org has active, and the plan-enforced cap on how many it can run at once. */
-export function makeSubscriptions(db: DatabaseSync) {
-  const orgPlanName = (orgId: string): PlanName => {
-    const o = db.prepare("SELECT plan FROM org WHERE id=?").get(orgId) as Row | undefined;
+export function makeSubscriptions(db: AppDb) {
+  const orgPlanName = async (orgId: string): Promise<PlanName> => {
+    const o = await db.org.findOne({ _id: orgId });
     return (o?.plan ?? "starter") as PlanName;
   };
-  const orgPlan = (orgId: string) => PLANS[orgPlanName(orgId)];
+  const orgPlan = async (orgId: string) => PLANS[await orgPlanName(orgId)];
 
-  const hasSubscription = (orgId: string, slug: string) =>
-    !!db.prepare("SELECT 1 FROM subscription WHERE org_id=? AND automation_slug=? AND status='active'").get(orgId, slug);
+  const hasSubscription = async (orgId: string, slug: string) =>
+    !!(await db.subscription.findOne({ org_id: orgId, automation_slug: slug, status: "active" }));
 
-  const requireSubscription = (orgId: string, slug: string) => {
-    if (!hasSubscription(orgId, slug)) throw httpError(402, "This automation is not active on your account. Subscribe to continue.");
+  const requireSubscription = async (orgId: string, slug: string) => {
+    if (!(await hasSubscription(orgId, slug))) throw httpError(402, "This automation is not active on your account. Subscribe to continue.");
   };
 
-  const listSubscriptions = (orgId: string) =>
-    db.prepare("SELECT automation_slug, status, created_at, canceled_at FROM subscription WHERE org_id=? ORDER BY created_at DESC").all(orgId) as Row[];
+  const listSubscriptions = async (orgId: string) =>
+    (await db.subscription.find({ org_id: orgId }).sort({ created_at: -1 }).toArray())
+      .map((s) => ({ automation_slug: s.automation_slug, status: s.status, created_at: s.created_at, canceled_at: s.canceled_at }));
 
-  const subscribe = (orgId: string, slug: string) => {
-    const cap = orgPlan(orgId).maxActiveAutomations;
-    const activeCount = (db.prepare("SELECT COUNT(*) AS n FROM subscription WHERE org_id=? AND status='active'").get(orgId) as Row).n;
-    if (!hasSubscription(orgId, slug) && activeCount >= cap)
+  const subscribe = async (orgId: string, slug: string) => {
+    const cap = (await orgPlan(orgId)).maxActiveAutomations;
+    const activeCount = await db.subscription.countDocuments({ org_id: orgId, status: "active" });
+    const existing = await db.subscription.findOne({ org_id: orgId, automation_slug: slug });
+    if (!(existing?.status === "active") && activeCount >= cap)
       throw httpError(402, `Your plan allows ${cap} active automation(s). Upgrade to add more.`);
-    const existing = db.prepare("SELECT id FROM subscription WHERE org_id=? AND automation_slug=?").get(orgId, slug) as Row | undefined;
-    if (existing) db.prepare("UPDATE subscription SET status='active', canceled_at=NULL WHERE id=?").run(existing.id);
-    else db.prepare("INSERT INTO subscription (id,org_id,automation_slug,status,created_at) VALUES (?,?,?,'active',?)")
-      .run(newId(), orgId, slug, now());
+    if (existing) await db.subscription.updateOne({ _id: existing._id }, { $set: { status: "active", canceled_at: null } });
+    else await db.subscription.insertOne({ _id: newId(), org_id: orgId, automation_slug: slug, status: "active", created_at: now(), canceled_at: null });
   };
 
-  const unsubscribe = (orgId: string, slug: string) => {
-    db.prepare("UPDATE subscription SET status='canceled', canceled_at=? WHERE org_id=? AND automation_slug=?")
-      .run(now(), orgId, slug);
+  const unsubscribe = async (orgId: string, slug: string) => {
+    await db.subscription.updateOne({ org_id: orgId, automation_slug: slug }, { $set: { status: "canceled", canceled_at: now() } });
   };
 
   return { orgPlanName, orgPlan, hasSubscription, requireSubscription, listSubscriptions, subscribe, unsubscribe };

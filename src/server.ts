@@ -4,7 +4,7 @@ import { openDb } from "./platform/db.ts";
 import { makeApi } from "./modules/meta-ads/meta/client.ts";
 import { makeAuth } from "./modules/meta-ads/meta/auth.ts";
 
-const app = buildApp(openDb(), { api: makeApi(), metaAuth: makeAuth() });
+const app = await buildApp(await openDb(), { api: makeApi(), metaAuth: makeAuth() });
 await app.listen({ port: config.port, host: "0.0.0.0" });
 console.log(`AppQuantive backend on http://localhost:${config.port}  (metaDryRun=${config.metaDryRun}, claude=${config.anthropicKey !== ""})`);
 

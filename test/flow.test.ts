@@ -12,8 +12,14 @@ const { DryRunAuth } = await import("../src/modules/meta-ads/meta/auth.ts");
 const { encrypt, decrypt } = await import("../src/modules/meta-ads/crypto.ts");
 const { META_ADS_SLUG } = await import("../src/modules/meta-ads/routes.ts");
 
-const buildTestApp = (db: ReturnType<typeof openDb>, api = new DryRunApi(), metaAuth = new DryRunAuth()) =>
-  buildApp(db, { api, metaAuth });
+let dbCounter = 0;
+const freshDb = () => openDb(`appquantive_test_${process.pid}_${Date.now()}_${dbCounter++}`);
+const buildTestApp = async (dbPromise: ReturnType<typeof freshDb>, api = new DryRunApi(), metaAuth = new DryRunAuth()) => {
+  const db = await dbPromise;
+  const app = await buildApp(db, { api, metaAuth });
+  app.addHook("onClose", async () => { await db.database.dropDatabase(); await db.close(); });
+  return app;
+};
 
 test("token encryption round-trips and is not plaintext", () => {
   const blob = encrypt("EAAB-secret");
@@ -23,7 +29,7 @@ test("token encryption round-trips and is not plaintext", () => {
 
 test("onboard -> propose -> approve -> optimize -> approve action -> kill switch", async () => {
   const api = new DryRunApi();
-  const app = buildTestApp(openDb(":memory:"), api);
+  const app = await buildTestApp(freshDb(), api);
   const signup = (await app.inject({ method: "POST", url: "/api/auth/signup", payload: { orgName: "Sweet Crumbs", email: "owner@a.com", password: "password123" } })).json();
   const headers = { authorization: "Bearer " + signup.token };
   const post = async (url: string, payload: unknown, method: "POST" | "PUT" = "POST") => {
@@ -81,12 +87,13 @@ test("onboard -> propose -> approve -> optimize -> approve action -> kill switch
   assert.ok(api.calls.some((c) => c.op === "setStatus" && (c.args as any).id === meta.campaignId && (c.args as any).s === "PAUSED"));
   const after = await post(`/api/businesses/${bid}/propose`, {});
   assert.equal((await post(`/api/campaigns/${after.body.campaignId}/approve`, { imageUrl: "https://example.com/a.jpg" })).status, 400);
+  await app.close();
 });
 
 test("tenancy: auth required, orgs isolated, plan caps, admin role", async () => {
   process.env.ADMIN_EMAIL = "admin@appquantive.com";
   process.env.ADMIN_PASSWORD = "adminpass123";
-  const app = buildTestApp(openDb(":memory:"));
+  const app = await buildTestApp(freshDb());
   const call = async (method: "GET" | "POST" | "PUT" | "DELETE", url: string, token?: string, payload?: object) => {
     const r = await app.inject({ method, url, payload, headers: token ? { authorization: "Bearer " + token } : {} });
     return { status: r.statusCode, body: r.json() };
@@ -129,10 +136,11 @@ test("tenancy: auth required, orgs isolated, plan caps, admin role", async () =>
   const clientOrgId = (await call("GET", "/api/admin/orgs", admin)).body.find((o: any) => o.name === "Client C").id;
   assert.equal((await call("POST", `/api/admin/orgs/${clientOrgId}/subscriptions`, admin, { slug: META_ADS_SLUG })).status, 200);
   assert.equal((await call("DELETE", `/api/admin/orgs/${clientOrgId}/subscriptions/${META_ADS_SLUG}`, admin)).status, 200);
+  await app.close();
 });
 
 test("Facebook connect flow: state-bound callback, asset pick, payment-method and token checks", async () => {
-  const app = buildTestApp(openDb(":memory:"));
+  const app = await buildTestApp(freshDb());
   const s = (await app.inject({ method: "POST", url: "/api/auth/signup", payload: { orgName: "Z", email: "z@x.com", password: "password123" } })).json();
   const h = { authorization: "Bearer " + s.token };
   await app.inject({ method: "POST", url: "/api/subscriptions", headers: h, payload: { slug: META_ADS_SLUG } });
@@ -160,4 +168,5 @@ test("Facebook connect flow: state-bound callback, asset pick, payment-method an
   // Another tenant cannot start or read this business's connection.
   const o = (await app.inject({ method: "POST", url: "/api/auth/signup", payload: { orgName: "Y", email: "y@x.com", password: "password123" } })).json();
   assert.equal((await app.inject({ url: `/api/businesses/${bid}/meta/assets`, headers: { authorization: "Bearer " + o.token } })).statusCode, 404);
+  await app.close();
 });
